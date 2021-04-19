@@ -102,12 +102,16 @@ local ObjectPooler = {}
 function ObjectPooler:AddToPool(objectReference)
 	if not CurrentPool[objectReference] then CurrentPool[objectReference] = {} end
 	
-	if typeof(objectReference) == "string" then objectReference = VariableMapping[objectReference] end
+	local variableName
+	if typeof(objectReference) == "string" then
+		variableName = objectReference
+		objectReference = VariableMapping[objectReference] 
+	end
 	
 	local newObject = createNewObject(objectReference)
 	newObject:Secure()
 
-	table.insert(CurrentPool[objectReference], newObject)
+	table.insert(CurrentPool[variableName or objectReference], newObject)
 	
 	return newObject
 end
