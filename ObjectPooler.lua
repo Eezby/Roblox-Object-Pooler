@@ -1,14 +1,100 @@
-local RELEASE_TIMEOUT = 30
+local RELEASE_TIMEOUT = 30				-- How long until the object gets automatically released if not already done
 
-local RESTORATION = true
-local RESTORE_DESCENDANTS = true
-local RESTORE_PROPERTIES = 
+local RESTORATION = true				-- Toggle if you want pooled object properties to be restored back to the original states
+local RESTORE_DESCENDANTS = true		-- Toggle if you want pooled object descendant properties to be restored back to the original states
+local RESTORE_PROPERTIES = 				-- Specify which properties you would like to be restored
 {
+	["BasePart"] = 			{["Transparency"] = true, ["Size"] = true}, -- Parts, MeshParts, Unions
+		
 	["ParticleEmitter"] = 	{["Enabled"] = true},
 	["Trail"] = 			{["Enabled"] = true},
 	["Decal"] = 			{["Transparency"] = true},
-	["BasePart"] = 			{["Transparency"] = true, ["Size"] = true},
+		
+	["ImageButton"] =		{["ImageTransparency"] = true, ["Size"] = true},
+	["TextButton"] =		{["BackgroundTransparency"] = true, ["Size"] = true},
+	["TextLabel"] =		{["BackgroundTransparency"] = true, ["Size"] = true},
+	["ImageLabel"] =		{["ImageTransparency"] = true, ["Size"] = true},
+	["Frame"] =		{["ImageTransparency"] = true, ["Size"] = true},
 }
+
+
+--[[
+**************************************** Pooler Functions ****************************************
+
+	 GetObject(objectReference [Instance || String]
+		* Takes an instance or string (if you set a variable) and attempts to pull an
+		  object from it's table. If it cannot find one, it will call 'AddToPool' to
+		  create a new object.
+		  
+		ex. ObjectPooler:GetObject(game.ReplicatedStorage.Bullet)
+		
+		
+	 AddToPool(objectReference [Instance])
+	 	* Takes an instance and creates/adds it to a pooled object table for later use.
+	 	
+		ex. ObjectPooler:AddToPool(game.ReplicatedStorage.Bullet)
+		
+		
+	 SetVariable(variableName [String], objectReference [Instance])
+		* Takes a string to set as the object's variable, and an instance to map it to.
+		  This can be used to shorten code to use single strings instead of the entire path.
+		  
+		ex. ObjectPooler:SetVariable("Bullet", game.ReplicatedStorage.Bullet)
+		
+***************************************************************************************************
+
+
+
+**************************************** Wrapped Functions ****************************************
+	 obj:Secure()
+		* Secures the object preventing it from being selected from the pool. This is done automatically 
+		  by the pooler, but can used carefully to secure an object for later use
+		
+		
+	 obj:Release(delayTime [number])
+		* Takes an OPTIONAL delay time and releases the object which allows it to be selected from the pool again.
+		  
+		ex. obj:Release(3)
+		
+	 obj:Restore()
+		* Depending on your settings it will restore the object's properties back to before it was secured. This is done
+		  automatically by the pooler if you have the setting enabled.
+***************************************************************************************************
+
+
+
+********************************************* Examples ********************************************
+	1. This example will create a bullet, fire it, and release it for use again after 3 seconds
+	
+		local ObjectPooler = require(game.ReplicatedStorage.ObjectPooler)
+		
+		local bullet = ObjectPooler:GetObject(game.ReplicatedStorage.Bullet)
+		bullet.object.CFrame = CFrame.new(0,5,0)
+		bullet.object.Velocity = Vector3.new(250,0,0)
+		bullet:Release(3)
+		
+		
+	2. This example will create a bullet, fire it, and wait until it hits something before being released or
+		if it doesn't hit anything, release it after 3 seconds
+		
+		local ObjectPooler = require(game.ReplicatedStorage.ObjectPooler)
+		ObjectPooler:SetVariable("bullet", game.ReplicatedStorage.Bullet)
+		
+		local bullet = ObjectPooler:GetObject("bullet")
+		bullet.object.CFrame = CFrame.new(0,5,0)
+		bullet.object.Velocity = Vector3.new(250,0,0)
+		bullet:Release(3)
+		
+		local touchConnection = bullet.Touched:Connect(function(hitObject)
+			local character = hitObject.Parent
+			if character:FindFirstChild("Humanoid") then
+				touchConnection:Disconnect()
+				bullet:Release()
+			end
+		end)
+		
+***************************************************************************************************
+]]
 
 local CurrentPool = {}
 local VariableMapping = {}
