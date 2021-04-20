@@ -1,6 +1,7 @@
 local RELEASE_TIMEOUT = 30				-- How long until the object gets automatically released if not already done
 
-local RESTORATION = true				-- Toggle if you want pooled object properties to be restored back to the original states
+local AUTO_SIZE = true					-- Toggle if you want the pool to grow if it can't find an object. If false, CreateObjectPool() must be initialized
+local RESTORATION = false				-- Toggle if you want pooled object properties to be restored back to the original states
 local RESTORE_DESCENDANTS = true		-- Toggle if you want pooled object descendant properties to be restored back to the original states
 local RESTORE_PROPERTIES = 				-- Specify which properties you would like to be restored
 {
@@ -12,11 +13,10 @@ local RESTORE_PROPERTIES = 				-- Specify which properties you would like to be 
 		
 	["ImageButton"] =		{["ImageTransparency"] = true, ["Size"] = true},
 	["TextButton"] =		{["BackgroundTransparency"] = true, ["Size"] = true},
-	["TextLabel"] =		{["BackgroundTransparency"] = true, ["Size"] = true},
+	["TextLabel"] =			{["BackgroundTransparency"] = true, ["Size"] = true},
 	["ImageLabel"] =		{["ImageTransparency"] = true, ["Size"] = true},
-	["Frame"] =		{["ImageTransparency"] = true, ["Size"] = true},
+	["Frame"] =				{["ImageTransparency"] = true, ["Size"] = true},
 }
-
 
 --[[
 **************************************** Pooler Functions ****************************************
@@ -96,14 +96,24 @@ local RESTORE_PROPERTIES = 				-- Specify which properties you would like to be 
 ***************************************************************************************************
 ]]
 
+local RunService = game:GetService("RunService")
+local FastWait = require(script.FastWait)
+
 local CurrentPool = {}
 local VariableMapping = {}
+
+local IsStudio = RunService:IsStudio()
+local FarCFrame = CFrame.new(10e5,0,0)
 
 local function createNewObject(objectReference)
 	local newObject = {
 		secured = false,
+		connections = {},
 		object = objectReference:Clone()
 	}
+	
+	newObject.object.CFrame = FarCFrame
+	newObject.object.Parent = workspace.Folder
 
 	if RESTORATION then
 		newObject.props = {}
@@ -139,6 +149,7 @@ local function createNewObject(objectReference)
 		end
 	end
 	
+	
 	function newObject:Secure()
 		self.secured = tick() + RELEASE_TIMEOUT
 	end
@@ -169,13 +180,24 @@ local function createNewObject(objectReference)
 			self.secured = releaseTime
 			
 			coroutine.wrap(function()
-				wait(delayTime)
+				if IsStudio and not RunService:IsRunning() then
+					wait(delayTime)
+				else
+					FastWait(delayTime)
+				end
+				
 				if self.secured == releaseTime then
 					self:Release()
 				end
 			end)()
 		else
-			self.object.Parent = nil
+			if #newObject.connections > 0 then
+				for _,connection in pairs(newObject.connections) do
+					connection:Disconnect()
+				end
+			end
+			
+			self.object.CFrame = FarCFrame
 			self:Restore()
             self.secured = false
         end
@@ -185,6 +207,42 @@ local function createNewObject(objectReference)
 end
 
 local ObjectPooler = {}
+local function waitForObject(objectReference)
+	local pooledObject
+	repeat
+		RunService.Heartbeat:Wait()
+		pooledObject = ObjectPooler:GetObject(objectReference, true)
+	until pooledObject
+	
+	return pooledObject
+end
+
+function ObjectPooler:ClearPool(objectReference)
+	for _,object in pairs(CurrentPool[objectReference]) do
+		object:Destroy()
+	end
+	
+	table.clear(CurrentPool[objectReference])
+	
+	if typeof(objectReference) == "string" then
+		VariableMapping[objectReference] = nil
+	end
+end
+
+function ObjectPooler:CreatePool(objectReference, amount)
+	CurrentPool[objectReference] = CurrentPool[objectReference] or {}
+	
+	local variableName
+	if typeof(objectReference) == "string" then
+		variableName = objectReference
+		objectReference = VariableMapping[objectReference] 
+	end
+	
+	for i = 1, amount-#CurrentPool[variableName or objectReference] do
+		table.insert(CurrentPool[variableName or objectReference], createNewObject(objectReference))
+	end
+end
+
 function ObjectPooler:AddToPool(objectReference)
 	if not CurrentPool[objectReference] then CurrentPool[objectReference] = {} end
 	
@@ -207,7 +265,7 @@ function ObjectPooler:SetVariable(variableName, objectReference)
 	VariableMapping[variableName] = objectReference
 end
 
-function ObjectPooler:GetObject(objectReference)
+function ObjectPooler:GetObject(objectReference, dontWait)
 	if CurrentPool[objectReference] then
 		for _,obj in pairs(CurrentPool[objectReference]) do
 			local securedObject = false
@@ -224,8 +282,12 @@ function ObjectPooler:GetObject(objectReference)
 			end
 		end
 	end
-
-	return ObjectPooler:AddToPool(objectReference)
+	
+	if AUTO_SIZE then
+		return ObjectPooler:AddToPool(objectReference)
+	elseif not dontWait then
+		return waitForObject(objectReference)
+	end
 end
 
 return ObjectPooler
