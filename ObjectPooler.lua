@@ -218,8 +218,8 @@ local function waitForObject(objectReference)
 end
 
 function ObjectPooler:ClearPool(objectReference)
-	for _,object in pairs(CurrentPool[objectReference]) do
-		object:Destroy()
+	for _,obj in pairs(CurrentPool[objectReference]) do
+		obj.object:Destroy()
 	end
 	
 	table.clear(CurrentPool[objectReference])
